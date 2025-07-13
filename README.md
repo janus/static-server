@@ -4,7 +4,7 @@ A simple Node.js static file server. This is experimental.
 
 ## Features
 
-- Serves static files (HTML, CSS, JS, images, etc.)
+- Serves static files (HTML, CSS, JS, images, pdf, etc.)
 - Handles common browser MIME types
 - Easy to configure and run
 - It is assumed that your files are located in a directory named "static" within the same directory as this script.
@@ -71,7 +71,7 @@ A simple Node.js static file server. This is experimental.
     ```
 
 ## Limitations
-   If the the file is a folder, it won't open it from broswer action after listing.
+   It lacks logger for activities of the server.
 
 ## License
 

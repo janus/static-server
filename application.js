@@ -16,10 +16,13 @@ function readFile(pathname, staticPath, filesDirectory) {
   try {
     let lstat = fs.lstatSync(filePath); // Check if file exists
     lstat.isFile(); // Ensure it's a file
+    if (lstat.isDirectory()) {
+      throw new Error("Not a file but directory");
+    }
     size = lstat.size;
   } catch (err) {
     console.error("File not found:", filePath);
-    throw new Error("File not found");
+    throw new Error("File not found may be a directory");
   }
   try {
     let file = fs.createReadStream(filePath);
@@ -30,7 +33,7 @@ function readFile(pathname, staticPath, filesDirectory) {
   }
 }
 
-function basicHTML(staticPath, input, filesDirectory) {
+function basicHTML(staticPath, input, filesDirectory, innerDirectory = "") {
   return `<!DOCTYPE html>
     <html lang="en">
     <head>
@@ -42,18 +45,22 @@ function basicHTML(staticPath, input, filesDirectory) {
       <h1>Welcome to the Static Server</h1>
       <p>${input}</p>
       <ul>
-          ${listResources(staticPath, filesDirectory).map((file) => `<li><a href="${file}">${file}</a></li>`).join("")}
+          ${listResources(staticPath, filesDirectory, innerDirectory).map((file) => `<li><a href="${file}">${file}</a></li>`).join("")}
       </ul>
     </body>
     </html>`;
 }
 
-function listResources(staticPath, filesDirectory) {
-  var dirPath = path.join(__dirname, filesDirectory);
+function listResources(staticPath, filesDirectory, innerDirectory = "") {
+  var dirPath = path.join(__dirname, innerDirectory? filesDirectory + "/" + innerDirectory : filesDirectory);
+  if (!fs.existsSync(dirPath)) {
+    console.error("Directory does not exist:", dirPath);
+    throw new Error("Directory does not exist");
+  }
   try {
     var files = fs.readdirSync(dirPath);
     return files.map((file) => {
-      return path.join(staticPath, file);
+      return path.join(staticPath, innerDirectory? innerDirectory + "/" + file: file);
     });
   } catch (err) {
     console.error("Error reading directory:", err);
@@ -105,6 +112,18 @@ function app(staticPath, heading, headers, filesDirectory = "static") {
         file.pipe(res);
         return;
       } catch (err) {
+        try {
+          if(err.message == "Not a file but directory" || err.message == "File not found may be a directory") {
+            res.writeHead(200, { "Content-Type": "text/html" });
+            res.end(basicHTML(staticPath, heading, filesDirectory, sanitizePath.replaceAll(staticPath, "")));
+            return;
+          }
+        } catch (err) {
+          res.statusCode = 404;
+          res.end(`Path ${sanitizePath}: ${err.message}`);
+          return;
+        }
+
         res.statusCode = 404;
         res.end(`Path ${sanitizePath}: ${err.message}`);
         return;
