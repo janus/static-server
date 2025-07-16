@@ -3,4 +3,5 @@ package-lock.json
 package.json
 .prettierrc
 .prettierignore
+.Static-Server.log
 static/

@@ -4,6 +4,7 @@ const https = require("node:https");
 const http = require("node:http");
 
 const fetchStaticPages = require("./application.js"); // Import the app function from server1.js
+const logger = require("./logger.js"); // Import the logger module
 const heading = "List of static resources:"; // Define a heading for the HTML page
 
 const headers = {};
@@ -13,6 +14,7 @@ let tls = false;
 const options = {};
 let filesDirectory = "static"; // Default directory for static files
 let browserPath = "echo"; // This is a fake path for the browser to access the static files
+let log = logger.createLogger(); // Create a logger instance
 
 const helpMessage = `
   -dir string
@@ -50,12 +52,14 @@ for (let i = 0; i < argv.length; i++) {
     browserPath = argv[i + 1].trim();
     i++;
     console.log(`Browser path: ${browserPath}`);
+    log.info(`Browser path: ${browserPath}`);
   }
 
   if (val.startsWith("-dir")) {
     filesDirectory = argv[i + 1].trim();
     i++;
     console.log(`Files Directory: ${filesDirectory}`);
+    log.info(`Files Directory: ${filesDirectory}`);
   }
 
   if (val.startsWith("-h")) {
@@ -70,14 +74,16 @@ for (let i = 0; i < argv.length; i++) {
     }
     i++;
     console.log(`Host: ${host}`);
+    log.info(`Host: ${host}`);
   }
 
   if (val.startsWith("-tls")) {
     tls = true;
     console.log("TLS enabled");
+    log.info("TLS enabled");
   }
 
-if (val.startsWith("dir")) {
+  if (val.startsWith("dir")) {
     filesDirectory = argv[i + 1].trim();
   }
 
@@ -96,11 +102,14 @@ if (val.startsWith("dir")) {
     headers["Access-Control-Allow-Methods"] = "GET";
     headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization";
     console.log("CORS headers added");
+    log.info("CORS headers added");
   }
 
   if (val.startsWith("-coop")) {
     headers["Cross-Origin-Opener-Policy"] = "same-origin";
     headers["Cross-Origin-Embedder-Policy"] = "require-corp";
+    console.log("COOP headers added");
+    log.info("COOP headers added");
   }
 
   if (val.startsWith("-addr")) {
@@ -110,6 +119,7 @@ if (val.startsWith("dir")) {
       host = addr[0];
       port = parseInt(addr[1], 10);
       console.log(`Host: ${host}, Port: ${port}`);
+      log.info(`Host: ${host}, Port: ${port}`);
     }
     i++;
   }
@@ -119,23 +129,25 @@ if (val.startsWith("dir")) {
  * The main entry point of the static server.
  * It initializes the server with the specified host, port, and TLS options.
  * If TLS is enabled, it creates an HTTPS server; otherwise, it creates an HTTP server.
- * The server serves static files from the specified path and returns a list of resources.  
+ * The server serves static files from the specified path and returns a list of resources.
  * It is assumed that your files are located in a directory named "static" within the same directory as this script.
  * @module static-server
  * @requires node:fs
  * @requires node:https
  * @requires node:http
- * @requires ./application.js   
+ * @requires ./application.js
  */
 
-app = fetchStaticPages(browserPath, heading, headers, filesDirectory); // Initialize the app with the static path
+app = fetchStaticPages(browserPath, heading, headers, filesDirectory, log); // Initialize the app with the static path
 
 if (tls) {
   https.createServer(options, app).listen(port, host, () => {
     console.log(`Server running at https://${host}:${port}/`);
+    log.info(`Server running at https://${host}:${port}/`);
   });
 } else {
   http.createServer(app).listen(port, host, () => {
     console.log(`Server running at http://${host}:${port}/`);
+    log.info(`Server running at http://${host}:${port}/`);
   });
 }

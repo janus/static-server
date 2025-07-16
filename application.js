@@ -8,7 +8,6 @@ function readFile(pathname, staticPath, filesDirectory) {
   var filePath = path.join(
     __dirname,
     filesDirectory,
-    
     pathname.replace(staticPath, ""),
   );
   console.log("Reading file:", filePath);
@@ -45,14 +44,19 @@ function basicHTML(staticPath, input, filesDirectory, innerDirectory = "") {
       <h1>Welcome to the Static Server</h1>
       <p>${input}</p>
       <ul>
-          ${listResources(staticPath, filesDirectory, innerDirectory).map((file) => `<li><a href="${file}">${file}</a></li>`).join("")}
+          ${listResources(staticPath, filesDirectory, innerDirectory)
+            .map((file) => `<li><a href="${file}">${file}</a></li>`)
+            .join("")}
       </ul>
     </body>
     </html>`;
 }
 
 function listResources(staticPath, filesDirectory, innerDirectory = "") {
-  var dirPath = path.join(__dirname, innerDirectory? filesDirectory + "/" + innerDirectory : filesDirectory);
+  var dirPath = path.join(
+    __dirname,
+    innerDirectory ? filesDirectory + "/" + innerDirectory : filesDirectory,
+  );
   if (!fs.existsSync(dirPath)) {
     console.error("Directory does not exist:", dirPath);
     throw new Error("Directory does not exist");
@@ -60,16 +64,21 @@ function listResources(staticPath, filesDirectory, innerDirectory = "") {
   try {
     var files = fs.readdirSync(dirPath);
     return files.map((file) => {
-      return path.join(staticPath, innerDirectory? innerDirectory + "/" + file: file);
+      return path.join(
+        staticPath,
+        innerDirectory ? innerDirectory + "/" + file : file,
+      );
     });
   } catch (err) {
     console.error("Error reading directory:", err);
   }
 }
 
-function app(staticPath, heading, headers, filesDirectory = "static") {
-  filesDirectory = filesDirectory.includes("/") ? filesDirectory.replaceAll("/", "") : filesDirectory;
-  
+function app(staticPath, heading, headers, filesDirectory = "static", log) {
+  filesDirectory = filesDirectory.includes("/")
+    ? filesDirectory.replaceAll("/", "")
+    : filesDirectory;
+
   return function (req, res, next) {
     if (staticPath === undefined) {
       staticPath = "/static/";
@@ -87,13 +96,23 @@ function app(staticPath, heading, headers, filesDirectory = "static") {
       .normalize(myURL.pathname)
       .replace(/^(\.\.[\/\\])+/, "");
 
-    if (sanitizePath === "/" || sanitizePath === "") {
+    if ("GET" == req.method && (sanitizePath === "/" || sanitizePath === "")) {
       res.writeHead(200, { "Content-Type": "text/html" });
       res.end(basicHTML(staticPath, heading, filesDirectory));
+      console.log(req.method, "Request for", sanitizePath);
+      log.info(
+        req.method,
+        "Request for",
+        sanitizePath,
+        "from ",
+        req.socket.remoteAddress,
+        `host: ${req.headers.host}`,
+        `File name: ${path.basename(__filename)}`,
+      );
       return;
     }
 
-    if (sanitizePath.startsWith(staticPath)) {
+    if (sanitizePath.startsWith(staticPath) && "GET" == req.method) {
       try {
         const lastIndex = sanitizePath.lastIndexOf(".");
         const ext = lastIndex !== -1 ? sanitizePath.slice(lastIndex) : "";
@@ -102,35 +121,99 @@ function app(staticPath, heading, headers, filesDirectory = "static") {
 
         let [file, size] = readFile(
           decodeURIComponent(sanitizePath),
-          staticPath, filesDirectory
+          staticPath,
+          filesDirectory,
         );
         res.writeHead(200, {
           "Content-Length": size,
           "Content-Type": contentType,
           ...headers,
         });
+        log.info(
+          req.method,
+          "Request for",
+          sanitizePath,
+          "from ",
+          req.socket.remoteAddress,
+          `host: ${req.headers.host}`,
+          `File name: ${path.basename(__filename)}`,
+        );
+
         file.pipe(res);
         return;
       } catch (err) {
         try {
-          if(err.message == "Not a file but directory" || err.message == "File not found may be a directory") {
+          if (
+            err.message == "Not a file but directory" ||
+            err.message == "File not found may be a directory"
+          ) {
+            log.warn(
+              req.method,
+              "Request for",
+              sanitizePath,
+              "from ",
+              req.socket.remoteAddress,
+              `host: ${req.headers.host}`,
+              `Expected a file but got a directory or file not found`,
+              `File name: ${path.basename(__filename)}`,
+            );
+
             res.writeHead(200, { "Content-Type": "text/html" });
-            res.end(basicHTML(staticPath, heading, filesDirectory, sanitizePath.replaceAll(staticPath, "")));
+            res.end(
+              basicHTML(
+                staticPath,
+                heading,
+                filesDirectory,
+                sanitizePath.replaceAll(staticPath, ""),
+              ),
+            );
             return;
           }
         } catch (err) {
+          log.error(
+            "Error handling request:",
+            req.method,
+            sanitizePath,
+            "from",
+            req.socket.remoteAddress,
+            `host: ${req.headers.host}`,
+            `Error: ${err.message}`,
+            `File name: ${path.basename(__filename)}`,
+          );
           res.statusCode = 404;
           res.end(`Path ${sanitizePath}: ${err.message}`);
           return;
         }
-
+        log.error(
+          "Error handling request:",
+          req.method,
+          sanitizePath,
+          "from",
+          req.socket.remoteAddress,
+          `host: ${req.headers.host}`,
+          `Error: ${err.message}`,
+          `File name: ${path.basename(__filename)}`,
+        );
         res.statusCode = 404;
         res.end(`Path ${sanitizePath}: ${err.message}`);
         return;
       }
     }
+    log.error(
+      "Error handling request:",
+      req.method,
+      sanitizePath,
+      "from",
+      req.socket.remoteAddress,
+      `host: ${req.headers.host}`,
+      "Error: method not allowed or path not found",
+      `File name: ${path.basename(__filename)}`,
+    );
+
     res.writeHead(404, { "Content-Type": "text/plain" });
-    res.end(`The requested resource ${sanitizePath} was not found on this server.`);
+    res.end(
+      `The requested resource ${sanitizePath} was not found on this server.`,
+    );
   };
 }
 
